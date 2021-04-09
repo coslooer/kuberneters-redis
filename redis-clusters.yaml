@@ -1,0 +1,79 @@
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: redis-clusters
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redis
+      appCluster: redis-cluster
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: redis
+        appCluster: redis-cluster
+    spec:
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: server-mall-redis-pvc
+        - name: redis-config
+          configMap:
+            name: redis-conf
+            defaultMode: 420
+      containers:
+        - name: redis
+          image: 'redis:6.0'
+          command:
+            - redis-server
+            - /usr/local/etc/redis/redis.conf
+          args:
+            - '--protected-mode'
+            - 'no'
+          ports:
+            - containerPort: 6379
+              protocol: TCP
+            - containerPort: 16379
+              protocol: TCP
+          resources:
+            limits:
+              cpu: 500m
+              memory: 700Mi
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+            - name: redis-config
+              mountPath: /usr/local/etc/redis/redis.conf
+              subPath: redis.conf
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: Always
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 20
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - redis
+                topologyKey: kubernetes.io/hostname
+      schedulerName: default-scheduler
+  serviceName: ''
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  revisionHistoryLimit: 10
